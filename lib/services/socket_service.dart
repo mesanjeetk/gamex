@@ -49,7 +49,7 @@ class SocketService {
       }
 
       _socket = IO.io(
-        'http://localhost:3001',
+        'https://raja-server.onrender.com',
         IO.OptionBuilder()
             .setTransports(['websocket'])
             .enableAutoConnect()
