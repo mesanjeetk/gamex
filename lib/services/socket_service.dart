@@ -49,7 +49,7 @@ class SocketService {
       }
 
       _socket = IO.io(
-        'https://raja-server.onrender.com',
+        'https://fl-server-kcrf.onrender.com',
         IO.OptionBuilder()
             .setTransports(['websocket'])
             .enableAutoConnect()
