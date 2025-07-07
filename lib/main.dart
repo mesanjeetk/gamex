@@ -34,12 +34,8 @@ class TicTacToeApp extends StatelessWidget {
     return MaterialApp(
       title: 'Tic Tac Toe Multiplayer',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme.copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(),
-      ),
-      darkTheme: AppTheme.darkTheme.copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(),
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       home: const SplashScreen(),
     );

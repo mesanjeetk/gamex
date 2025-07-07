@@ -51,11 +51,11 @@ class AppTheme {
         ),
       ),
     ),
-    cardTheme: const CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        side: BorderSide(color: Color(0xFFE5E7EB)), // grey.shade200
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
       ),
       color: lightSurface,
     ),
@@ -114,11 +114,11 @@ class AppTheme {
         ),
       ),
     ),
-    cardTheme: const CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        side: BorderSide(color: Color(0xFF374151)), // grey.shade800
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade800),
       ),
       color: darkSurface,
     ),
