@@ -46,6 +46,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void dispose() {
     _pulseController.dispose();
     _celebrationController.dispose();
+    // Clean up socket state when leaving game screen
+    SocketService().leaveCurrentRoom();
     super.dispose();
   }
 
@@ -189,13 +191,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _showDisconnectionDialog() {
@@ -284,245 +288,260 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    // Clean up socket state when user presses back button
+    SocketService().leaveCurrentRoom();
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF6366F1),
-              Color(0xFF8B5CF6),
-              Color(0xFFA855F7),
-            ],
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF6366F1),
+                Color(0xFF8B5CF6),
+                Color(0xFFA855F7),
+              ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const Expanded(child: ConnectionStatus()),
-                    if (_room?.isPrivate == true)
-                      IconButton(
-                        onPressed: _copyRoomId,
-                        icon: const Icon(
-                          Icons.copy,
-                          color: Colors.white,
-                        ),
-                        tooltip: 'Copy Room ID',
-                      ),
-                  ],
-                ),
-              ),
-              
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                     children: [
-                      // Game title and status
-                      Text(
-                        _room?.isPrivate == true 
-                            ? 'Private Room: ${_room!.name}'
-                            : 'Quick Play',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      IconButton(
+                        onPressed: () {
+                          SocketService().leaveCurrentRoom();
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(
+                          Icons.arrow_back,
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
                         ),
-                        textAlign: TextAlign.center,
                       ),
-                      
-                      if (_room?.isPrivate == true) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Room ID: ${_room!.id}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withOpacity(0.8),
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Game status
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _getGameStatusText(),
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      const Expanded(child: ConnectionStatus()),
+                      if (_room?.isPrivate == true)
+                        IconButton(
+                          onPressed: _copyRoomId,
+                          icon: const Icon(
+                            Icons.copy,
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
                           ),
+                          tooltip: 'Copy Room ID',
                         ),
-                      )
-                          .animate(controller: _isMyTurn() && !_gameOver ? _pulseController : null)
-                          .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.05, 1.05)),
-                      
-                      const SizedBox(height: 32),
-                      
-                      // Players
-                      if (_room != null) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: PlayerCard(
-                                player: _getMyPlayer(),
-                                isCurrentPlayer: _isMyTurn() && _gameStarted && !_gameOver,
-                                label: 'You',
-                                isMe: true,
-                              ),
-                            ),
-                            
-                            const SizedBox(width: 16),
-                            
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                'VS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            
-                            const SizedBox(width: 16),
-                            
-                            Expanded(
-                              child: PlayerCard(
-                                player: _getOpponent(),
-                                isCurrentPlayer: !_isMyTurn() && _gameStarted && !_gameOver,
-                                label: 'Opponent',
-                                isMe: false,
-                              ),
-                            ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 32),
-                      ],
-                      
-                      // Game board
-                      if (_room != null && _gameStarted)
-                        GameBoard(
-                          board: _room!.board,
-                          onMove: _makeMove,
-                          disabled: !_isMyTurn() || _gameOver,
-                          winPattern: _winPattern,
-                        )
-                            .animate()
-                            .fadeIn(duration: 600.ms)
-                            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.0, 1.0)),
-                      
-                      // Waiting indicator
-                      if (_isWaiting) ...[
-                        const SizedBox(height: 32),
-                        const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        )
-                            .animate()
-                            .fadeIn(duration: 600.ms),
-                        const SizedBox(height: 16),
-                        Text(
-                          _room?.isPrivate == true
-                              ? 'Share the room ID with your friend'
-                              : 'Looking for an opponent...',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.white.withOpacity(0.8),
-                          ),
-                          textAlign: TextAlign.center,
-                        )
-                            .animate()
-                            .fadeIn(delay: 300.ms, duration: 600.ms),
-                      ],
-                      
-                      // Game over actions
-                      if (_gameOver) ...[
-                        const SizedBox(height: 32),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  _isWinner() 
-                                      ? Icons.emoji_events
-                                      : _winner == 'draw'
-                                          ? Icons.handshake
-                                          : Icons.sentiment_neutral,
-                                  size: 48,
-                                  color: _isWinner() 
-                                      ? Colors.amber
-                                      : Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _getGameStatusText(),
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton(
-                                        onPressed: () => Navigator.of(context).pop(),
-                                        child: const Text('Back to Home'),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: _playAgain,
-                                        child: const Text('Play Again'),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                            .animate(controller: _celebrationController)
-                            .fadeIn(duration: 600.ms)
-                            .scale(
-                              begin: const Offset(0.8, 0.8),
-                              end: const Offset(1.0, 1.0),
-                              curve: Curves.elasticOut,
-                            ),
-                      ],
                     ],
                   ),
                 ),
-              ),
-            ],
+                
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        // Game title and status
+                        Text(
+                          _room?.isPrivate == true 
+                              ? 'Private Room: ${_room!.name}'
+                              : 'Quick Play',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        
+                        if (_room?.isPrivate == true) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Room ID: ${_room!.id}',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white.withOpacity(0.8),
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Game status
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _getGameStatusText(),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                            .animate(controller: _isMyTurn() && !_gameOver ? _pulseController : null)
+                            .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.05, 1.05)),
+                        
+                        const SizedBox(height: 32),
+                        
+                        // Players
+                        if (_room != null) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: PlayerCard(
+                                  player: _getMyPlayer(),
+                                  isCurrentPlayer: _isMyTurn() && _gameStarted && !_gameOver,
+                                  label: 'You',
+                                  isMe: true,
+                                ),
+                              ),
+                              
+                              const SizedBox(width: 16),
+                              
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'VS',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(width: 16),
+                              
+                              Expanded(
+                                child: PlayerCard(
+                                  player: _getOpponent(),
+                                  isCurrentPlayer: !_isMyTurn() && _gameStarted && !_gameOver,
+                                  label: 'Opponent',
+                                  isMe: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 32),
+                        ],
+                        
+                        // Game board
+                        if (_room != null && _gameStarted)
+                          GameBoard(
+                            board: _room!.board,
+                            onMove: _makeMove,
+                            disabled: !_isMyTurn() || _gameOver,
+                            winPattern: _winPattern,
+                          )
+                              .animate()
+                              .fadeIn(duration: 600.ms)
+                              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.0, 1.0)),
+                        
+                        // Waiting indicator
+                        if (_isWaiting) ...[
+                          const SizedBox(height: 32),
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          )
+                              .animate()
+                              .fadeIn(duration: 600.ms),
+                          const SizedBox(height: 16),
+                          Text(
+                            _room?.isPrivate == true
+                                ? 'Share the room ID with your friend'
+                                : 'Looking for an opponent...',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                            textAlign: TextAlign.center,
+                          )
+                              .animate()
+                              .fadeIn(delay: 300.ms, duration: 600.ms),
+                        ],
+                        
+                        // Game over actions
+                        if (_gameOver) ...[
+                          const SizedBox(height: 32),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    _isWinner() 
+                                        ? Icons.emoji_events
+                                        : _winner == 'draw'
+                                            ? Icons.handshake
+                                            : Icons.sentiment_neutral,
+                                    size: 48,
+                                    color: _isWinner() 
+                                        ? Colors.amber
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    _getGameStatusText(),
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            SocketService().leaveCurrentRoom();
+                                            Navigator.of(context).pop();
+                                          },
+                                          child: const Text('Back to Home'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: _playAgain,
+                                          child: const Text('Play Again'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                              .animate(controller: _celebrationController)
+                              .fadeIn(duration: 600.ms)
+                              .scale(
+                                begin: const Offset(0.8, 0.8),
+                                end: const Offset(1.0, 1.0),
+                                curve: Curves.elasticOut,
+                              ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

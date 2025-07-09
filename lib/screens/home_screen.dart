@@ -27,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadSavedUsername();
     _setupSocketListeners();
+    // Reset any previous game state when returning to home
+    SocketService().resetGameState();
   }
 
   @override
@@ -62,13 +64,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _saveUsername(String username) async {
@@ -94,11 +98,19 @@ class _HomeScreenState extends State<HomeScreen> {
     SocketService().joinPublicGame(username);
     
     if (mounted) {
-      Navigator.of(context).push(
+      // Navigate and reset loading state when we return
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => GameScreen(playerName: username),
         ),
       );
+      
+      // Reset loading state when returning from game screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -125,11 +137,19 @@ class _HomeScreenState extends State<HomeScreen> {
     SocketService().createPrivateRoom(roomName, username);
     
     if (mounted) {
-      Navigator.of(context).push(
+      // Navigate and reset loading state when we return
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => GameScreen(playerName: username),
         ),
       );
+      
+      // Reset loading state when returning from game screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -156,11 +176,19 @@ class _HomeScreenState extends State<HomeScreen> {
     SocketService().joinPrivateRoom(roomId, username);
     
     if (mounted) {
-      Navigator.of(context).push(
+      // Navigate and reset loading state when we return
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => GameScreen(playerName: username),
         ),
       );
+      
+      // Reset loading state when returning from game screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -312,8 +340,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
                                   onPressed: _isLoading ? null : _joinPublicGame,
-                                  icon: const Icon(Icons.play_arrow),
-                                  label: const Text('Quick Play'),
+                                  icon: _isLoading 
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Icon(Icons.play_arrow),
+                                  label: Text(_isLoading ? 'Joining...' : 'Quick Play'),
                                 ),
                               ),
                               
@@ -356,13 +393,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           .animate()
                           .fadeIn(delay: 800.ms, duration: 600.ms)
                           .slideY(begin: 0.3, end: 0),
-                      
-                      if (_isLoading) ...[
-                        const SizedBox(height: 24),
-                        const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ],
                     ],
                   ),
                 ),

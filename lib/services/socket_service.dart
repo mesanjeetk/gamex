@@ -15,6 +15,7 @@ class SocketService {
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   static const int maxReconnectAttempts = 5;
+  String? _currentRoomId;
   
   // Event streams
   final StreamController<Room> _roomController = StreamController<Room>.broadcast();
@@ -37,6 +38,7 @@ class SocketService {
   Stream<void> get opponentDisconnectedStream => _opponentDisconnectedController.stream;
 
   bool get isConnected => _isConnected;
+  String? get currentRoomId => _currentRoomId;
 
   Future<void> connect() async {
     if (_socket != null && _isConnected) return;
@@ -49,7 +51,7 @@ class SocketService {
       }
 
       _socket = IO.io(
-        'https://fl-server-kcrf.onrender.com',
+        'http://localhost:3001',
         IO.OptionBuilder()
             .setTransports(['websocket'])
             .enableAutoConnect()
@@ -97,16 +99,19 @@ class SocketService {
     // Game event listeners
     _socket!.on('waiting-for-opponent', (data) {
       final room = Room.fromJson(data['room']);
+      _currentRoomId = room.id;
       _roomController.add(room);
     });
 
     _socket!.on('room-created', (data) {
       final room = Room.fromJson(data['room']);
+      _currentRoomId = room.id;
       _roomController.add(room);
     });
 
     _socket!.on('game-start', (data) {
       final room = Room.fromJson(data['room']);
+      _currentRoomId = room.id;
       _gameStartController.add(room);
     });
 
@@ -224,13 +229,30 @@ class SocketService {
     _socket!.emit('play-again', {'roomId': roomId});
   }
 
+  // Clean up current game state
+  void leaveCurrentRoom() {
+    if (_currentRoomId != null && _socket != null) {
+      _socket!.emit('leave-room', {'roomId': _currentRoomId});
+    }
+    _currentRoomId = null;
+  }
+
+  // Reset all game state
+  void resetGameState() {
+    _currentRoomId = null;
+    // Clear any pending events by adding null/empty data
+    // This helps reset UI state when navigating back
+  }
+
   void disconnect() {
+    leaveCurrentRoom();
     _cancelReconnectTimer();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
     _isConnected = false;
     _reconnectAttempts = 0;
+    _currentRoomId = null;
   }
 
   void dispose() {
