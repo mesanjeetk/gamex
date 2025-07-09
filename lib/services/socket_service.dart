@@ -51,7 +51,7 @@ class SocketService {
       }
 
       _socket = IO.io(
-        'http://localhost:3001',
+        'https://fl-server-kcrf.onrender.com',
         IO.OptionBuilder()
             .setTransports(['websocket'])
             .enableAutoConnect()
